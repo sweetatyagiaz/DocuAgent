@@ -1,0 +1,34 @@
+Acme Corp Employee Handbook
+
+Section 1: Refund Policy
+Acme Corp offers a 30-day money-back guarantee on all software subscriptions.
+Customers must request a refund through the support portal within 30 days of
+purchase. Refunds are processed within 5-7 business days and are issued to
+the original payment method. Annual plans are refunded on a pro-rated basis
+after the first 30 days; monthly plans are not eligible for partial refunds
+after the 30-day window.
+
+Section 2: Remote Work Policy
+Employees may work remotely up to 3 days per week without prior manager
+approval. Fully remote arrangements require written approval from both the
+employee's manager and HR. All remote employees must be reachable during
+core hours, 10 AM to 3 PM in their local time zone.
+
+Section 3: Vacation and Time Off
+Full-time employees accrue 15 days of paid time off (PTO) per year during
+their first two years, increasing to 20 days starting in year three.
+Unused PTO up to 5 days may be carried over into the next calendar year.
+PTO requests should be submitted at least 2 weeks in advance through the
+HR portal.
+
+Section 4: Expense Reimbursement
+Employees may submit expense reports for business-related travel, client
+meals, and approved software subscriptions. Reimbursement requests must be
+submitted within 60 days of the expense with an itemized receipt attached.
+Expenses over $500 require pre-approval from a department head.
+
+Section 5: Security Policy
+All employees must enable two-factor authentication (2FA) on their company
+accounts. Laptops must be encrypted and password-protected. Any suspected
+security incident must be reported to the IT Security team within 24 hours
+of discovery.
