@@ -5,7 +5,8 @@ An AI assistant that combines **Retrieval-Augmented Generation (RAG)** with
 search the web, run calculations, and query a database, deciding on its own
 which tool(s) to use for a given question.
 
-> Status: 🚧 Work in progress — currently in Phase 4.
+> Status: 🚧 Work in progress — currently in Phase 1 (project skeleton).
+> See `GenAI-RAG-Agentic-Demo-Project-Plan` for the full build roadmap.
 
 ## Quick Start (current state)
 
@@ -56,8 +57,7 @@ genai-rag-agent-demo/
 - [x] Phase 2: RAG pipeline
 - [x] Phase 3: Agent tools
 - [x] Phase 4: Agentic orchestration
-- [ ] Phase 5: Guardrails
-- [ ] Phase 5: Guardrails
+- [x] Phase 5: Guardrails
 - [ ] Phase 6: Frontend
 - [ ] Phase 7: Testing
 - [ ] Phase 8: Deployment
@@ -140,6 +140,40 @@ agent with a query that needs **two tools in one turn**:
 Without `ANTHROPIC_API_KEY` set, it fails gracefully with a clear message
 instead of crashing (proving the wiring is correct). Add your key to `.env`
 to see live multi-tool reasoning and a memory-aware follow-up question.
+
+## Phase 5: Guardrails & Reliability (done)
+
+Three guardrails added to make the system trustworthy instead of just functional:
+
+1. **Hallucination fallback (`app/rag/rag_chain.py`)** — before calling the LLM,
+   a lexical-overlap confidence check compares the query's significant words
+   against the top retrieved chunk. If there's not enough overlap, the system
+   says plainly "the documents don't cover this" instead of generating an
+   answer from a weak/irrelevant match. (We use word overlap rather than raw
+   vector distance because this project's local hashing embedder — chosen to
+   avoid a network dependency — doesn't separate relevant/irrelevant results
+   cleanly enough on distance alone. Swap in a real embedding model and you
+   can lean more on distance.)
+2. **SQL input sanitization (`app/tools/sql_tool.py`)** — beyond the
+   SELECT-only rule from Phase 3, it now also blocks SQL comment syntax
+   (`--`, `/* */`, a common injection/obfuscation vector), caps query length,
+   and auto-appends a `LIMIT` if the agent doesn't specify one, so a broad
+   query can't dump an entire table into the LLM's context.
+3. **Decision logging (`app/agent/logger.py`)** — every agent invocation is
+   logged to `logs/agent_decisions.jsonl` with the query, which tool(s) were
+   called, their inputs/outputs, and the final answer. Great for debugging
+   *and* for a live demo ("here's the agent's reasoning trace").
+
+Try it yourself:
+
+```bash
+python3 tests/test_guardrails.py
+```
+
+This verifies: an off-topic question is correctly flagged as ungrounded, an
+on-topic question still passes, five different unsafe/malformed SQL queries
+are all rejected with clear reasons, row-limiting works, and decisions are
+logged correctly.
 
 ## Tech Stack
 

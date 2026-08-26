@@ -4,9 +4,13 @@ SQL Tool for the Agent.
 Lets the agent answer questions about structured data (products, employees)
 by running read-only SQL queries against the demo SQLite database.
 
-SAFETY: only SELECT statements are allowed. Anything else (INSERT, UPDATE,
-DELETE, DROP, ATTACH, PRAGMA, multiple statements, etc.) is rejected before
-it ever touches the database.
+SAFETY (Phase 5 guardrails):
+- Only a single SELECT statement is allowed (no INSERT/UPDATE/DELETE/DROP/etc.)
+- SQL comment syntax is blocked (a common injection/obfuscation vector)
+- Multiple statements (stacked via ';') are blocked
+- Queries are length-capped
+- Results are automatically capped with LIMIT if the caller didn't specify one,
+  so a broad query can't dump the entire table into the LLM's context
 """
 
 import sqlite3
@@ -29,10 +33,17 @@ _DISALLOWED_KEYWORDS = re.compile(
     re.IGNORECASE,
 )
 
+MAX_QUERY_LENGTH = 500
+DEFAULT_ROW_LIMIT = 50
+
 
 def _is_safe_select(query: str) -> tuple[bool, str]:
     stripped = query.strip().rstrip(";")
 
+    if len(stripped) > MAX_QUERY_LENGTH:
+        return False, f"Query exceeds max length of {MAX_QUERY_LENGTH} characters."
+    if "--" in stripped or "/*" in stripped or "*/" in stripped:
+        return False, "SQL comment syntax is not allowed."
     if ";" in stripped:
         return False, "Multiple statements are not allowed."
     if not stripped.upper().startswith("SELECT"):
@@ -40,6 +51,13 @@ def _is_safe_select(query: str) -> tuple[bool, str]:
     if _DISALLOWED_KEYWORDS.search(stripped):
         return False, "Query contains a disallowed keyword."
     return True, ""
+
+
+def _enforce_row_limit(query: str, limit: int = DEFAULT_ROW_LIMIT) -> str:
+    """Append a LIMIT clause if the query doesn't already have one."""
+    if re.search(r"\bLIMIT\s+\d+", query, re.IGNORECASE):
+        return query
+    return f"{query.rstrip().rstrip(';')} LIMIT {limit}"
 
 
 def run(query: str, db_path: str = DB_PATH) -> str:
@@ -56,11 +74,13 @@ def run(query: str, db_path: str = DB_PATH) -> str:
     if not is_safe:
         return f"Query rejected: {reason} Only single SELECT statements are permitted."
 
+    safe_query = _enforce_row_limit(query)
+
     try:
         conn = sqlite3.connect(db_path)
         conn.row_factory = sqlite3.Row
         cur = conn.cursor()
-        cur.execute(query)
+        cur.execute(safe_query)
         rows = cur.fetchall()
         conn.close()
 
@@ -72,6 +92,10 @@ def run(query: str, db_path: str = DB_PATH) -> str:
         lines = [header, "-" * len(header)]
         for row in rows:
             lines.append(" | ".join(str(row[c]) for c in columns))
+
+        if len(rows) == DEFAULT_ROW_LIMIT and "LIMIT" not in query.upper():
+            lines.append(f"\n(Results capped at {DEFAULT_ROW_LIMIT} rows.)")
+
         return "\n".join(lines)
 
     except sqlite3.Error as e:

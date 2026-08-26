@@ -14,6 +14,7 @@ from langgraph.checkpoint.memory import MemorySaver
 
 from app.agent.prompts import AGENT_SYSTEM_PROMPT
 from app.agent.memory import config_for_thread
+from app.agent.logger import log_decision
 from app.tools import calculator_tool, sql_tool, web_search_tool, rag_tool
 
 
@@ -91,7 +92,9 @@ def invoke_agent(message: str, thread_id: str) -> dict:
     try:
         agent = build_agent()
     except RuntimeError as e:
-        return {"answer": f"[Agent unavailable: {e}]", "tool_calls": []}
+        answer = f"[Agent unavailable: {e}]"
+        log_decision(thread_id, message, [], answer)
+        return {"answer": answer, "tool_calls": []}
 
     config = config_for_thread(thread_id)
     result = agent.invoke({"messages": [{"role": "user", "content": message}]}, config=config)
@@ -114,4 +117,5 @@ def invoke_agent(message: str, thread_id: str) -> dict:
         elif msg_type == "ai" and not getattr(msg, "tool_calls", None):
             final_answer = msg.content
 
+    log_decision(thread_id, message, tool_calls, final_answer)
     return {"answer": final_answer, "tool_calls": tool_calls}
