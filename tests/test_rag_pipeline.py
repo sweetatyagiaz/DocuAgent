@@ -1,4 +1,6 @@
 """
+Manual/automated test for the Phase 2 RAG pipeline.
+
 Run with:  python -m tests.test_rag_pipeline
 """
 
