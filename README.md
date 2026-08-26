@@ -5,8 +5,7 @@ An AI assistant that combines **Retrieval-Augmented Generation (RAG)** with
 search the web, run calculations, and query a database, deciding on its own
 which tool(s) to use for a given question.
 
-> Status: 🚧 Work in progress — currently in Phase 1 (project skeleton).
-> See `GenAI-RAG-Agentic-Demo-Project-Plan` for the full build roadmap.
+> Status: 🚧 Work in progress — currently in Phase 4.
 
 ## Quick Start (current state)
 
