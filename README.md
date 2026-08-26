@@ -1,4 +1,4 @@
-# GenAI Demo Project: RAG + Agentic AI System
+# GenAI Project: RAG + Agentic AI System
 
 ## 1. Project Overview
 
