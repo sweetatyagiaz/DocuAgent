@@ -246,5 +246,3 @@ git push
 ---
 
 ## Next Steps
-
-Once you confirm this plan, we'll proceed **step by step starting with Phase 0/1**: environment setup, folder structure, and initializing the GitHub repository — then move into building the RAG pipeline.
