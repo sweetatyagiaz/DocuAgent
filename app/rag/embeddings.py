@@ -57,11 +57,22 @@ def _hash_embed(text: str, dim: int = EMBEDDING_DIM) -> np.ndarray:
 class LocalHashingEmbeddingFunction(EmbeddingFunction):
     """A zero-dependency, zero-download embedding function for offline demos."""
 
-    def __call__(self, input: Documents) -> Embeddings:
-        return [_hash_embed(text) for text in input]
+    def __init__(self, dim: int = EMBEDDING_DIM):
+        self.dim = dim
 
-    def name(self) -> str:
+    def __call__(self, input: Documents) -> Embeddings:
+        return [_hash_embed(text, dim=self.dim) for text in input]
+
+    @staticmethod
+    def name() -> str:
         return "local-hashing-embedding-v1"
+
+    def get_config(self) -> dict:
+        return {"dim": self.dim}
+
+    @staticmethod
+    def build_from_config(config: dict) -> "LocalHashingEmbeddingFunction":
+        return LocalHashingEmbeddingFunction(dim=config.get("dim", EMBEDDING_DIM))
 
 
 def get_embedding_function():

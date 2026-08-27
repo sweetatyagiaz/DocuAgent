@@ -59,7 +59,7 @@ genai-rag-agent-demo/
 - [x] Phase 4: Agentic orchestration
 - [x] Phase 5: Guardrails
 - [x] Phase 6: Frontend
-- [ ] Phase 7: Testing
+- [x] Phase 7: Testing
 - [ ] Phase 8: Deployment
 - [ ] Phase 9: Documentation polish
 
@@ -199,6 +199,35 @@ streamlit run frontend/streamlit_app.py
 Then open the local URL it prints (usually http://localhost:8501). I booted
 this exact app in a sandboxed environment and confirmed it serves HTTP 200
 with no exceptions in the Streamlit script-run log before shipping it.
+
+## Phase 7: Testing (done)
+
+`tests/test_queries.py` is the consolidated pytest suite covering every
+category from the plan — 12 deterministic tests plus 4 live-agent tests:
+
+- **Calculator** (3 expressions + 1 safety check)
+- **SQL** (category filter, department filter, aggregate `COUNT`, + 1 rejected
+  destructive query)
+- **RAG** (2 on-topic questions with correct source attribution, + 1 off-topic
+  question correctly refused instead of hallucinated)
+- **Web search** (runs without crashing regardless of API key state)
+- **Multi-tool agent queries** (RAG+calculator combined, SQL+calculator
+  combined, multi-turn memory, and "no tools needed" for a simple greeting)
+
+The 12 deterministic tests need no API key and always run. The 4 agent-level
+tests are automatically **skipped with a clear reason** (not failed) when
+`ANTHROPIC_API_KEY` isn't set, since verifying which tools an LLM *chooses*
+to call requires a live model.
+
+Run it:
+
+```bash
+pytest tests/test_queries.py -v
+```
+
+I ran this exact suite: **12 passed, 4 skipped, 0 warnings** in this
+sandbox (no API key available here). Add your key and rerun to unlock the
+4 live multi-tool tests.
 
 ## Tech Stack
 
