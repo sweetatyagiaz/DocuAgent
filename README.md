@@ -6,6 +6,7 @@ search the web, run calculations, and query a database, deciding on its own
 which tool(s) to use for a given question.
 
 > Status: 🚧 Work in progress — currently in Phase 1 (project skeleton).
+> See `GenAI-RAG-Agentic-Demo-Project-Plan` for the full build roadmap.
 
 ## Quick Start (current state)
 
@@ -57,7 +58,7 @@ genai-rag-agent-demo/
 - [x] Phase 3: Agent tools
 - [x] Phase 4: Agentic orchestration
 - [x] Phase 5: Guardrails
-- [ ] Phase 6: Frontend
+- [x] Phase 6: Frontend
 - [ ] Phase 7: Testing
 - [ ] Phase 8: Deployment
 - [ ] Phase 9: Documentation polish
@@ -173,6 +174,31 @@ This verifies: an off-topic question is correctly flagged as ungrounded, an
 on-topic question still passes, five different unsafe/malformed SQL queries
 are all rejected with clear reasons, row-limiting works, and decisions are
 logged correctly.
+
+## Phase 6: Frontend (done)
+
+`frontend/streamlit_app.py` is a full chat UI:
+
+- **Chat window** with persistent conversation memory (uses the agent's
+  thread-id system from Phase 4, with a "New conversation" button to reset it)
+- **Document upload widget** in the sidebar — drop a PDF/TXT/DOCX in and it's
+  immediately chunked, embedded, and added to the vector store, so you can
+  ask questions about it in the very next message. A "Load sample documents"
+  button ingests the included Acme handbook with one click for a quick demo.
+- **Agent Reasoning panel** — a collapsible expander under each assistant
+  reply showing exactly which tool(s) fired, their inputs, and their raw
+  outputs, so you can visually prove the agent is really deciding between
+  tools rather than following a fixed script
+
+Run it:
+
+```bash
+streamlit run frontend/streamlit_app.py
+```
+
+Then open the local URL it prints (usually http://localhost:8501). I booted
+this exact app in a sandboxed environment and confirmed it serves HTTP 200
+with no exceptions in the Streamlit script-run log before shipping it.
 
 ## Tech Stack
 
