@@ -60,7 +60,7 @@ genai-rag-agent-demo/
 - [x] Phase 5: Guardrails
 - [x] Phase 6: Frontend
 - [x] Phase 7: Testing
-- [ ] Phase 8: Deployment
+- [x] Phase 8: Deployment
 - [ ] Phase 9: Documentation polish
 
 ## Phase 2: RAG Pipeline (done)
@@ -228,6 +228,59 @@ pytest tests/test_queries.py -v
 I ran this exact suite: **12 passed, 4 skipped, 0 warnings** in this
 sandbox (no API key available here). Add your key and rerun to unlock the
 4 live multi-tool tests.
+
+## Phase 8: Deployment (done)
+
+Three Docker files, each for a different scenario:
+
+- **`Dockerfile`** — single-process build for hosts that expect one
+  container and one file literally named `Dockerfile` (e.g. **Hugging
+  Face Spaces'** Docker SDK). Runs the Streamlit frontend on port 7860.
+- **`Dockerfile.backend`** — the FastAPI service, for hosts where you want
+  a standalone API/health-check endpoint alongside the UI.
+- **`Dockerfile.frontend`** — the Streamlit UI as its own image, used
+  together with the backend via `docker-compose.yml`.
+- **`docker-compose.yml`** — runs backend + frontend together locally,
+  sharing a named volume (`chroma_data`) so ingested documents survive
+  container restarts.
+
+**Important fix made during this phase:** the SQL tool's demo database
+(`app/db/sample.db`) is now regenerated at Docker **build time**
+(`RUN python -m app.db.init_db`) rather than relying on a binary file
+being committed to the repo — this makes the image fully reproducible
+from source alone.
+
+### Run locally with Docker Compose
+
+```bash
+docker compose up --build
+# Backend:  http://localhost:8000/health
+# Frontend: http://localhost:8501
+```
+
+### Deploy options
+
+| Host | How |
+|---|---|
+| **Hugging Face Spaces** | Create a Space with SDK = Docker, push this repo — it picks up the root `Dockerfile` automatically. Add `ANTHROPIC_API_KEY`/`TAVILY_API_KEY` as Space secrets. |
+| **Render** | New Web Service → point at your GitHub repo → set Dockerfile path to `Dockerfile` (frontend-only) or configure two services from `Dockerfile.backend`/`Dockerfile.frontend` for the full split architecture. Add env vars in the dashboard. |
+| **Railway** | New Project → Deploy from GitHub → Railway auto-detects `docker-compose.yml` and can spin up both services. Add env vars per service. |
+
+**Testing note:** this sandbox has no Docker daemon available (the
+package mirror here is incomplete and nested Docker isn't reliable in
+this environment), so I couldn't run a literal `docker build`. Instead, I
+verified correctness the way that matters most: I reproduced the *exact*
+file set each `COPY` instruction would produce in an isolated directory,
+regenerated the database the same way `RUN python -m app.db.init_db`
+would, and ran both entrypoints (`uvicorn app.main:app` and
+`streamlit run frontend/streamlit_app.py`) from that isolated context —
+both served traffic correctly. I also fresh-installed `requirements.txt`
+into a brand-new virtualenv and reran the full Phase 7 test suite against
+it (12 passed, 4 skipped) to confirm the pinned dependency versions
+actually work together. Please run `docker compose up --build` yourself
+once to confirm on your machine/host, since a Dockerfile can still fail
+in ways specific to the Docker layer (base image pulls, layer caching)
+that this method can't catch.
 
 ## Tech Stack
 
