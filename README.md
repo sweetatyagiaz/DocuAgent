@@ -1,287 +1,244 @@
-# DocuAgent — GenAI RAG + Agentic AI Demo
+# 🤖 DocuAgent — RAG + Agentic AI Demo
 
 An AI assistant that combines **Retrieval-Augmented Generation (RAG)** with
-**Agentic tool-use** — it can answer questions grounded in your own documents,
-search the web, run calculations, and query a database, deciding on its own
-which tool(s) to use for a given question.
+**Agentic tool-use**: it answers questions grounded in your own documents,
+searches the web, runs calculations, and queries a database — deciding on
+its own, per question, which of those tools (if any) it actually needs.
 
-> Status: 🚧 Work in progress — currently in Phase 1 (project skeleton).
-> See `GenAI-RAG-Agentic-Demo-Project-Plan` for the full build roadmap.
+> Built as a from-scratch demo of the two most in-demand GenAI patterns in
+> one working system, with tested guardrails, a live "show your reasoning"
+> UI, Docker deployment, and a CI-ready test suite.
 
-## Quick Start (current state)
+---
+
+## Why this project
+
+Most GenAI demos show *one* capability: either a chatbot that answers from
+documents (RAG), or a chatbot that calls a few tools (an agent). Real
+production systems usually need both — and need to know *when* to use each.
+This project is a compact but complete example of that combination:
+
+- **Knows things** — grounded answers from real documents, not the model's
+  memorized training data
+- **Does things** — live web search, math, and structured database queries
+- **Decides for itself** — a single question like *"What's our refund
+  policy, and what's 15% of $200?"* correctly triggers **two** tools in one
+  turn, not a hardcoded pipeline
+- **Doesn't lie when it doesn't know** — a confidence check refuses to
+  answer from documents that don't actually cover the question
+
+## Demo
+
+https://github.com/user-attachments/assets/PLACEHOLDER — *(record a 60–90s
+screen capture of a multi-tool query and drop it here, or add a GIF — see
+"Recording your own demo" below)*
+
+**Suggested demo script** (this is the moment that sells the project):
+
+1. Open the app, click **"Load sample documents"** in the sidebar
+2. Ask: *"What is our refund policy for annual plans?"* → shows a grounded,
+   sourced answer via `document_search`
+3. Ask: *"What is our refund policy, and what's 15% of $200?"* → expand the
+   **🧠 Agent Reasoning** panel to show **both** `document_search` and
+   `calculator` firing for one question
+4. Ask something off-topic, e.g. *"What's the capital of Mongolia?"* — show
+   that it refuses to hallucinate from the documents instead of guessing
+5. Ask a follow-up question that relies on conversation memory
+
+### Recording your own demo
+
+```bash
+streamlit run frontend/streamlit_app.py
+```
+Use any screen recorder (macOS: Cmd+Shift+5, Windows: Xbox Game Bar
+Win+G, or [OBS Studio](https://obsproject.com/) cross-platform) to capture
+60–90 seconds following the script above, export as a GIF or short MP4, and
+replace the placeholder link above — GitHub renders both inline in a README.
+
+## Architecture
+
+```mermaid
+flowchart TD
+    U[User] --> UI[Streamlit Chat UI]
+    UI --> AGENT[LangGraph Agent<br/>ReAct orchestrator + memory]
+
+    AGENT -->|"needs document info"| RAG[document_search tool]
+    AGENT -->|"needs live info"| WEB[web_search tool]
+    AGENT -->|"needs math"| CALC[calculator tool]
+    AGENT -->|"needs structured data"| SQL[sql_query tool]
+
+    RAG --> CONF{Confidence<br/>check}
+    CONF -->|relevant| VDB[(ChromaDB<br/>vector store)]
+    CONF -->|not relevant| REFUSE[Refuse to answer<br/>no hallucination]
+    VDB --> CLAUDE1[Claude generates<br/>grounded answer]
+
+    WEB --> TAVILY[Tavily Search API]
+    SQL --> SQLITE[(SQLite demo DB)]
+
+    CLAUDE1 --> AGENT
+    TAVILY --> AGENT
+    CALC --> AGENT
+    SQLITE --> AGENT
+
+    AGENT --> LOG[(Decision log<br/>logs/agent_decisions.jsonl)]
+    AGENT --> ANSWER[Final answer +<br/>tool trace]
+    ANSWER --> UI
+
+    DOCS[PDF / TXT / DOCX<br/>uploads] -.chunk + embed.-> VDB
+```
+
+**The core idea:** the Agent is the "brain." For every message it decides —
+using an LLM, not a fixed if/else pipeline — which tool(s) to call, in what
+order, before answering. A single question can trigger multiple tools.
+
+## Features
+
+| Capability | Where |
+|---|---|
+| Document-grounded Q&A (RAG) | `app/rag/` |
+| Multi-tool agentic reasoning | `app/agent/orchestrator.py` |
+| Live web search | `app/tools/web_search_tool.py` (Tavily API) |
+| Safe math evaluation (no `eval()`) | `app/tools/calculator_tool.py` |
+| Read-only, injection-safe SQL | `app/tools/sql_tool.py` |
+| Hallucination guardrail | `app/rag/rag_chain.py` confidence check |
+| Agent decision logging | `app/agent/logger.py` |
+| Conversation memory | LangGraph checkpointer, per-thread |
+| Live document upload | Streamlit sidebar, `frontend/streamlit_app.py` |
+| "Show your reasoning" UI panel | Same file — expands per-message tool trace |
+| Automated test suite | `tests/test_queries.py` (pytest) |
+| Docker + Compose deployment | `Dockerfile*`, `docker-compose.yml` |
+
+## Tech Stack
+
+Claude (Anthropic API) · LangGraph · LangChain · ChromaDB · FastAPI ·
+Streamlit · SQLite · Tavily · Docker · pytest
+
+## Quick Start
 
 ```bash
 # 1. Create and activate a virtual environment
 python3 -m venv venv
 source venv/bin/activate      # Windows: venv\Scripts\activate
 
-# 2. Install dependencies
+# 2. Install dependencies (pinned to exactly what this project was tested against)
 pip install -r requirements.txt
 
 # 3. Set up environment variables
 cp .env.example .env
-# then edit .env and add your ANTHROPIC_API_KEY and TAVILY_API_KEY
+# edit .env and add ANTHROPIC_API_KEY (required) and TAVILY_API_KEY (optional, for web search)
 
-# 4. Run the backend
-uvicorn app.main:app --reload
+# 4. Seed the demo database
+python3 -m app.db.init_db
 
-# 5. Confirm it works
-curl http://127.0.0.1:8000/health
+# 5. Run the frontend
+streamlit run frontend/streamlit_app.py
 ```
 
-You should see a JSON response confirming the server is running and whether
-your API keys loaded correctly.
+Or with Docker:
+
+```bash
+docker compose up --build
+# Frontend: http://localhost:8501
+# Backend health check: http://localhost:8000/health
+```
 
 ## Project Structure
 
 ```
 genai-rag-agent-demo/
 ├── app/
-│   ├── main.py          # FastAPI entrypoint
-│   ├── agent/            # Agent orchestration (LangGraph) — Phase 4
-│   ├── rag/               # Document loading, chunking, vector store — Phase 2
-│   ├── tools/             # RAG/Web/Calculator/SQL tools — Phase 3
-│   └── db/                # SQLite demo database
-├── frontend/              # Streamlit chat UI — Phase 6
-├── data/sample_docs/      # Drop demo PDFs/docs here
-├── tests/                 # Test queries — Phase 7
+│   ├── main.py                 # FastAPI entrypoint (health check / optional API)
+│   ├── agent/
+│   │   ├── orchestrator.py     # LangGraph agent — the core "brain"
+│   │   ├── prompts.py          # Tool-selection system prompt
+│   │   ├── memory.py           # Conversation thread helpers
+│   │   └── logger.py           # Decision logging
+│   ├── rag/
+│   │   ├── loader.py           # PDF/TXT/DOCX loading
+│   │   ├── chunker.py          # Overlapping chunk splitting
+│   │   ├── embeddings.py       # Local, zero-download embedder
+│   │   ├── vector_store.py     # ChromaDB wrapper
+│   │   ├── retriever.py        # Ingestion + retrieval API
+│   │   └── rag_chain.py        # Retrieve → confidence check → generate
+│   ├── tools/
+│   │   ├── rag_tool.py
+│   │   ├── web_search_tool.py
+│   │   ├── calculator_tool.py
+│   │   └── sql_tool.py
+│   └── db/
+│       └── init_db.py          # Seeds the demo SQLite database
+├── frontend/
+│   └── streamlit_app.py        # Chat UI, upload widget, reasoning panel
+├── data/sample_docs/           # Sample handbook for RAG demo
+├── tests/
+│   ├── test_queries.py         # Main pytest suite (all categories)
+│   ├── test_rag_pipeline.py
+│   ├── test_tools.py
+│   ├── test_agent.py
+│   └── test_guardrails.py
+├── Dockerfile                  # Single-container build (e.g. HF Spaces)
+├── Dockerfile.backend
+├── Dockerfile.frontend
+├── docker-compose.yml
 ├── .env.example
-├── requirements.txt
-└── README.md
+└── requirements.txt
 ```
 
-## Roadmap
-
-- [x] Phase 0: Environment setup
-- [x] Phase 1: Project skeleton
-- [x] Phase 2: RAG pipeline
-- [x] Phase 3: Agent tools
-- [x] Phase 4: Agentic orchestration
-- [x] Phase 5: Guardrails
-- [x] Phase 6: Frontend
-- [x] Phase 7: Testing
-- [x] Phase 8: Deployment
-- [ ] Phase 9: Documentation polish
-
-## Phase 2: RAG Pipeline (done)
-
-The RAG pipeline lives in `app/rag/`:
-
-- `loader.py` — reads .txt/.md/.pdf/.docx files
-- `chunker.py` — splits text into overlapping word chunks
-- `embeddings.py` — a local, zero-download "hashing trick" embedder (swap in
-  `sentence-transformers` or an API embedding model for production-quality
-  semantic search — see the docstring in that file)
-- `vector_store.py` — ChromaDB wrapper (add / similarity search)
-- `retriever.py` — ties ingestion + retrieval together
-- `rag_chain.py` — retrieve → build prompt → call Claude → grounded answer
-
-Try it yourself:
-
-```bash
-python3 tests/test_rag_pipeline.py
-```
-
-This ingests `data/sample_docs/acme_employee_handbook.txt` and runs sample
-questions against it, showing which chunk was retrieved for each. If
-`ANTHROPIC_API_KEY` isn't set in `.env`, it runs in "dry run" mode (shows
-retrieval only); once you add your key, it calls Claude for a real grounded answer.
-
-## Phase 3: Agent Tools (done)
-
-Four tools live in `app/tools/`, each exposing a `TOOL_NAME`, `TOOL_DESCRIPTION`,
-and a `run(...)` function — this consistent shape is what lets the Agent
-(Phase 4) route between them dynamically:
-
-- `rag_tool.py` (`document_search`) — answers from your ingested documents
-- `web_search_tool.py` (`web_search`) — live web search via Tavily API
-- `calculator_tool.py` (`calculator`) — safe AST-based math evaluation (no `eval()`)
-- `sql_tool.py` (`sql_query`) — read-only queries against the demo SQLite DB
-  (`products` and `employees` tables); rejects anything that isn't a single
-  `SELECT` statement
-
-Try it yourself:
-
-```bash
-python3 -m app.db.init_db        # creates app/db/sample.db with sample data
-python3 tests/test_tools.py      # exercises all four tools
-```
-
-Web search and RAG-with-generation both work in a graceful "dry run" mode
-until you add `TAVILY_API_KEY` / `ANTHROPIC_API_KEY` to `.env` — so you can
-verify the plumbing before spending any API credits.
-
-## Phase 4: Agentic Orchestration (done)
-
-`app/agent/` wires the four Phase 3 tools into a LangGraph ReAct agent that
-decides — per message — which tool(s) to call, in what order, before
-answering:
-
-- `prompts.py` — the system prompt that defines tool-selection logic
-  (this is the single most important piece of prompt engineering in the project)
-- `memory.py` — thread-id helpers for multi-turn conversation memory
-- `orchestrator.py` — builds the LangGraph agent (`create_react_agent`),
-  wraps each Phase 3 tool as a LangChain `@tool`, and exposes
-  `invoke_agent(message, thread_id)` which returns both the final answer
-  **and** the full list of tool calls made (useful for a "show your work"
-  UI panel in Phase 6)
-
-Try it yourself:
-
-```bash
-python3 tests/test_agent.py
-```
-
-This verifies all 4 tools register with valid schemas, then invokes the
-agent with a query that needs **two tools in one turn**:
-*"What is our refund policy for annual plans, and what is 15% of $200?"*
-— which should trigger both `document_search` and `calculator`.
-
-Without `ANTHROPIC_API_KEY` set, it fails gracefully with a clear message
-instead of crashing (proving the wiring is correct). Add your key to `.env`
-to see live multi-tool reasoning and a memory-aware follow-up question.
-
-## Phase 5: Guardrails & Reliability (done)
-
-Three guardrails added to make the system trustworthy instead of just functional:
-
-1. **Hallucination fallback (`app/rag/rag_chain.py`)** — before calling the LLM,
-   a lexical-overlap confidence check compares the query's significant words
-   against the top retrieved chunk. If there's not enough overlap, the system
-   says plainly "the documents don't cover this" instead of generating an
-   answer from a weak/irrelevant match. (We use word overlap rather than raw
-   vector distance because this project's local hashing embedder — chosen to
-   avoid a network dependency — doesn't separate relevant/irrelevant results
-   cleanly enough on distance alone. Swap in a real embedding model and you
-   can lean more on distance.)
-2. **SQL input sanitization (`app/tools/sql_tool.py`)** — beyond the
-   SELECT-only rule from Phase 3, it now also blocks SQL comment syntax
-   (`--`, `/* */`, a common injection/obfuscation vector), caps query length,
-   and auto-appends a `LIMIT` if the agent doesn't specify one, so a broad
-   query can't dump an entire table into the LLM's context.
-3. **Decision logging (`app/agent/logger.py`)** — every agent invocation is
-   logged to `logs/agent_decisions.jsonl` with the query, which tool(s) were
-   called, their inputs/outputs, and the final answer. Great for debugging
-   *and* for a live demo ("here's the agent's reasoning trace").
-
-Try it yourself:
-
-```bash
-python3 tests/test_guardrails.py
-```
-
-This verifies: an off-topic question is correctly flagged as ungrounded, an
-on-topic question still passes, five different unsafe/malformed SQL queries
-are all rejected with clear reasons, row-limiting works, and decisions are
-logged correctly.
-
-## Phase 6: Frontend (done)
-
-`frontend/streamlit_app.py` is a full chat UI:
-
-- **Chat window** with persistent conversation memory (uses the agent's
-  thread-id system from Phase 4, with a "New conversation" button to reset it)
-- **Document upload widget** in the sidebar — drop a PDF/TXT/DOCX in and it's
-  immediately chunked, embedded, and added to the vector store, so you can
-  ask questions about it in the very next message. A "Load sample documents"
-  button ingests the included Acme handbook with one click for a quick demo.
-- **Agent Reasoning panel** — a collapsible expander under each assistant
-  reply showing exactly which tool(s) fired, their inputs, and their raw
-  outputs, so you can visually prove the agent is really deciding between
-  tools rather than following a fixed script
-
-Run it:
-
-```bash
-streamlit run frontend/streamlit_app.py
-```
-
-Then open the local URL it prints (usually http://localhost:8501). I booted
-this exact app in a sandboxed environment and confirmed it serves HTTP 200
-with no exceptions in the Streamlit script-run log before shipping it.
-
-## Phase 7: Testing (done)
-
-`tests/test_queries.py` is the consolidated pytest suite covering every
-category from the plan — 12 deterministic tests plus 4 live-agent tests:
-
-- **Calculator** (3 expressions + 1 safety check)
-- **SQL** (category filter, department filter, aggregate `COUNT`, + 1 rejected
-  destructive query)
-- **RAG** (2 on-topic questions with correct source attribution, + 1 off-topic
-  question correctly refused instead of hallucinated)
-- **Web search** (runs without crashing regardless of API key state)
-- **Multi-tool agent queries** (RAG+calculator combined, SQL+calculator
-  combined, multi-turn memory, and "no tools needed" for a simple greeting)
-
-The 12 deterministic tests need no API key and always run. The 4 agent-level
-tests are automatically **skipped with a clear reason** (not failed) when
-`ANTHROPIC_API_KEY` isn't set, since verifying which tools an LLM *chooses*
-to call requires a live model.
-
-Run it:
+## Testing
 
 ```bash
 pytest tests/test_queries.py -v
 ```
 
-I ran this exact suite: **12 passed, 4 skipped, 0 warnings** in this
-sandbox (no API key available here). Add your key and rerun to unlock the
-4 live multi-tool tests.
+12 deterministic tests (calculator, SQL, RAG, web search) run with no API
+key required. 4 additional tests verify true multi-tool agent behavior and
+require `ANTHROPIC_API_KEY` to be set, since that requires a live LLM
+making real routing decisions.
 
-## Phase 8: Deployment (done)
+## Guardrails
 
-Three Docker files, each for a different scenario:
+- **No hallucinated document answers** — a lexical-confidence check refuses
+  to answer from documents that don't actually cover the question, rather
+  than generating a plausible-sounding guess
+- **SQL injection resistant** — only single `SELECT` statements are
+  permitted; comments, stacked statements, and destructive keywords are
+  rejected before ever touching the database; results are row-limited
+- **No arbitrary code execution** — the calculator parses expressions via
+  Python's `ast` module instead of `eval()`
+- **Full decision trail** — every agent call is logged with its tools,
+  inputs, outputs, and final answer
 
-- **`Dockerfile`** — single-process build for hosts that expect one
-  container and one file literally named `Dockerfile` (e.g. **Hugging
-  Face Spaces'** Docker SDK). Runs the Streamlit frontend on port 7860.
-- **`Dockerfile.backend`** — the FastAPI service, for hosts where you want
-  a standalone API/health-check endpoint alongside the UI.
-- **`Dockerfile.frontend`** — the Streamlit UI as its own image, used
-  together with the backend via `docker-compose.yml`.
-- **`docker-compose.yml`** — runs backend + frontend together locally,
-  sharing a named volume (`chroma_data`) so ingested documents survive
-  container restarts.
+## What I learned building this
 
-**Important fix made during this phase:** the SQL tool's demo database
-(`app/db/sample.db`) is now regenerated at Docker **build time**
-(`RUN python -m app.db.init_db`) rather than relying on a binary file
-being committed to the repo — this makes the image fully reproducible
-from source alone.
+- **Tool descriptions are the real prompt engineering.** The agent's
+  accuracy at picking the right tool depends almost entirely on how clearly
+  each tool's docstring/description explains *when* to use it — better
+  descriptions mattered more than a more complex orchestration graph.
+- **Embeddings quality is a real trade-off, not a footnote.** Using a
+  zero-dependency local hashing embedder (to avoid a network dependency in
+  restricted environments) meant raw vector distance wasn't reliable enough
+  for a hallucination-confidence threshold — I had to fall back to lexical
+  overlap as the signal instead. A production system would swap in a real
+  embedding model and could rely on distance directly.
+- **Guardrails need to be tested like features, not bolted on.** Writing
+  explicit tests for "does the SQL tool reject a DROP TABLE" and "does the
+  RAG chain refuse an off-topic question" caught real gaps that manual
+  testing would have missed.
+- **Reproducibility matters more than it seems at first.** A pinned
+  `requirements.txt` that doesn't match what you actually tested against is
+  a landmine for deployment — I caught a stale ChromaDB version pin during
+  the Docker phase that would have broken the build.
 
-### Run locally with Docker Compose
+## Roadmap / Possible Extensions
 
-```bash
-docker compose up --build
-# Backend:  http://localhost:8000/health
-# Frontend: http://localhost:8501
-```
+- Swap the local hashing embedder for a real model (`sentence-transformers`
+  or an API embedding model) for higher-quality semantic retrieval
+- Add a React frontend calling the FastAPI backend over HTTP instead of the
+  Streamlit UI calling the agent in-process
+- Add authentication and per-user document namespaces
+- Stream agent responses token-by-token instead of waiting for the full reply
+- Add more tools (calendar, email draft, code execution sandbox)
 
-### Deploy options
+## License
 
-| Host | How |
-|---|---|
-| **Hugging Face Spaces** | Create a Space with SDK = Docker, push this repo — it picks up the root `Dockerfile` automatically. Add `ANTHROPIC_API_KEY`/`TAVILY_API_KEY` as Space secrets. |
-| **Render** | New Web Service → point at your GitHub repo → set Dockerfile path to `Dockerfile` (frontend-only) or configure two services from `Dockerfile.backend`/`Dockerfile.frontend` for the full split architecture. Add env vars in the dashboard. |
-| **Railway** | New Project → Deploy from GitHub → Railway auto-detects `docker-compose.yml` and can spin up both services. Add env vars per service. |
-
-**Testing note:** this sandbox has no Docker daemon available (the
-package mirror here is incomplete and nested Docker isn't reliable in
-this environment), so I couldn't run a literal `docker build`. Instead, I
-verified correctness the way that matters most: I reproduced the *exact*
-file set each `COPY` instruction would produce in an isolated directory,
-regenerated the database the same way `RUN python -m app.db.init_db`
-would, and ran both entrypoints (`uvicorn app.main:app` and
-`streamlit run frontend/streamlit_app.py`) from that isolated context —
-both served traffic correctly. I also fresh-installed `requirements.txt`
-into a brand-new virtualenv and reran the full Phase 7 test suite against
-it (12 passed, 4 skipped) to confirm the pinned dependency versions
-actually work together. Please run `docker compose up --build` yourself
-once to confirm on your machine/host, since a Dockerfile can still fail
-in ways specific to the Docker layer (base image pulls, layer caching)
-that this method can't catch.
-
-## Tech Stack
-
-Claude (Anthropic API) · LangGraph · ChromaDB · FastAPI · Streamlit · SQLite · Docker
+MIT — see `LICENSE`.
