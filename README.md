@@ -145,7 +145,7 @@ docker compose up --build
 ## Project Structure
 
 ```
-genai-rag-agent-demo/
+DocuAgent/
 ├── app/
 │   ├── main.py                 # FastAPI entrypoint (health check / optional API)
 │   ├── agent/
